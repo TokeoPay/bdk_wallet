@@ -2,9 +2,53 @@ use bdk_wallet::bitcoin::{Amount, FeeRate, Psbt, TxIn};
 use bdk_wallet::test_utils::*;
 use bdk_wallet::{psbt, KeychainKind, SignOptions};
 use core::str::FromStr;
+use bitcoin::PublicKey;
+use miniscript::descriptor::SinglePubKey;
 
 // from bip 174
 const PSBT_STR: &str = "cHNidP8BAKACAAAAAqsJSaCMWvfEm4IS9Bfi8Vqz9cM9zxU4IagTn4d6W3vkAAAAAAD+////qwlJoIxa98SbghL0F+LxWrP1wz3PFTghqBOfh3pbe+QBAAAAAP7///8CYDvqCwAAAAAZdqkUdopAu9dAy+gdmI5x3ipNXHE5ax2IrI4kAAAAAAAAGXapFG9GILVT+glechue4O/p+gOcykWXiKwAAAAAAAEHakcwRAIgR1lmF5fAGwNrJZKJSGhiGDR9iYZLcZ4ff89X0eURZYcCIFMJ6r9Wqk2Ikf/REf3xM286KdqGbX+EhtdVRs7tr5MZASEDXNxh/HupccC1AaZGoqg7ECy0OIEhfKaC3Ibi1z+ogpIAAQEgAOH1BQAAAAAXqRQ1RebjO4MsRwUPJNPuuTycA5SLx4cBBBYAFIXRNTfy4mVAWjTbr6nj3aAfuCMIAAAA";
+
+const PSBT: &str = "cHNidP8BAL0CAAAAAvyH+HLjJbRWDVvIgnAMgI6icAABXqHanNkUEqA1ZwO3AwAAAAD/////leu9/mOG6RzP1W6n7nJlp69t98C4xpkvACIq9KHXtJEBAAAAAP////8DSgEAAAAAAAAiUSDjVSosJKQjinNE9lXwTOsNFPOB+9mkuQJ42IJXElREIQAAAAAAAAAAAmpdLxQAAAAAAAAiUSBoTRXZhJcTEeIzz1tGUIhGQGWRAkOBJqgfmQz+HFyj2wAAAAAAAQEr3xQAAAAAAAAiUSDAHc8wirbo4HkXQb7aM6cAQGqUYh65oe4ivJXz6nvB4AEDBAEAAAAAAQErWAIAAAAAAAAiUSBoTRXZhJcTEeIzz1tGUIhGQGWRAkOBJqgfmQz+HFyj2wEDBAEAAAABFyBiAaHIXDBNYaO2kmzgHLShJ7YNN/9zFbdWWTcfuH2V5wAAAAA=";
+
+#[test]
+fn test_annoying_psbt_issue() {
+    let psbt_bip = Psbt::from_str(PSBT).unwrap();
+    println!("{:}", psbt_bip.version);
+    psbt_bip.inputs.iter().for_each(|input| {
+        println!("{:?}", input.sighash_type);
+        println!("{:?}", input.bip32_derivation);
+        println!("{:?}", input.tap_key_origins);
+    });
+
+
+    let tap_key_origins = psbt_bip.inputs[0]
+        .tap_key_origins
+        .iter()
+        .map(|(pk, (_, keysource))| (SinglePubKey::XOnly(*pk), keysource));
+
+    psbt_bip.inputs[0]
+        .bip32_derivation
+        .iter()
+        .map(|(pk, keysource)| (SinglePubKey::FullKey(PublicKey::new(*pk)), keysource))
+        .chain(tap_key_origins)
+        .for_each(|(pk, keysource)| {
+            println!("{:?} - {:?}", pk, keysource)
+        });
+
+        // .find_map(|(pk, keysource)| {
+        //     (pk, keysource)
+        //     // if self.matches(keysource, secp).is_some() {
+        //     //     Some((pk, keysource.1.clone()))
+        //     // } else {
+        //     //     None
+        //     // }
+        // })
+
+
+
+
+
+}
 
 #[test]
 #[should_panic(expected = "InputIndexOutOfRange")]

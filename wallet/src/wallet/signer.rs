@@ -344,7 +344,15 @@ impl InputSigner for SignerWrapper<DescriptorXKey<Xpriv>> {
                 }
             }) {
             Some((pk, full_path)) => (pk, full_path),
-            None => return Ok(()),
+            None => {
+                if let Some(ws) = psbt.inputs[input_index].clone().witness_script {
+                    let priv_key = self.xkey.derive_priv(secp, &self.derivation_path).unwrap();
+                    let pk = secp256k1::PublicKey::from_secret_key(secp, &priv_key.private_key);
+                    (SinglePubKey::FullKey(PublicKey::from(pk)), self.derivation_path.clone())
+                } else {
+                    return Ok(())
+                }
+            },
         };
 
         let derived_key = match self.origin.clone() {
