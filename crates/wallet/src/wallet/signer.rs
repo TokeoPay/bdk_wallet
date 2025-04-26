@@ -331,7 +331,8 @@ impl InputSigner for SignerWrapper<DescriptorXKey<Xpriv>> {
             .tap_key_origins
             .iter()
             .map(|(pk, (_, keysource))| (SinglePubKey::XOnly(*pk), keysource));
-        let (public_key, full_path) = match psbt.inputs[input_index]
+
+        let (public_key, full_path, throw_on_err) = match psbt.inputs[input_index]
             .bip32_derivation
             .iter()
             .map(|(pk, keysource)| (SinglePubKey::FullKey(PublicKey::new(*pk)), keysource))
@@ -343,8 +344,16 @@ impl InputSigner for SignerWrapper<DescriptorXKey<Xpriv>> {
                     None
                 }
             }) {
-            Some((pk, full_path)) => (pk, full_path),
-            None => return Ok(()),
+            Some((pk, full_path)) => (pk, full_path, true),
+            None => {
+                if let Some(ws) = psbt.inputs[input_index].clone().witness_script {
+                    let priv_key = self.xkey.derive_priv(secp, &self.derivation_path).unwrap();
+                    let pk = secp256k1::PublicKey::from_secret_key(secp, &priv_key.private_key);
+                    (SinglePubKey::FullKey(PublicKey::from(pk)), self.derivation_path.clone(), false)
+                } else {
+                    return Ok(())
+                }
+            },
         };
 
         let derived_key = match self.origin.clone() {
@@ -365,7 +374,11 @@ impl InputSigner for SignerWrapper<DescriptorXKey<Xpriv>> {
             _ => false,
         };
         if !valid_key {
-            Err(SignerError::InvalidKey)
+            if throw_on_err {
+                Err(SignerError::InvalidKey)
+            } else {
+                return Ok(())
+            }
         } else {
             // HD wallets imply compressed keys
             let priv_key = PrivateKey {
